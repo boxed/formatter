@@ -159,12 +159,9 @@ def check_same_but_different_prefix(a: Node, b: Node, indent=0):
 parsed = parse(nicely_formatted)
 
 
-def reformat(node: Node, indent=0, already_handled_prefix_ids=None, already_handled_indent_line_numbers=None):
+def reformat(node: Node, indent=0, already_handled_prefix_ids=None):
     if already_handled_prefix_ids is None:
         already_handled_prefix_ids = set()
-
-    if already_handled_indent_line_numbers is None:
-        already_handled_indent_line_numbers = set()
 
     # TODO: handle prefix via _split_prefix to not destroy comments
     # if hasattr(node, 'prefix'):
@@ -185,14 +182,12 @@ def reformat(node: Node, indent=0, already_handled_prefix_ids=None, already_hand
         already_handled_prefix_ids.add(id(right))
 
     # TODO: prefix that includes indent
-    if not id(node.start_pos[0]) in already_handled_indent_line_numbers:
-        try:
-            if node.get_previous_leaf().type == 'newline':
-                node.prefix = indent * '    '
-                already_handled_indent_line_numbers.add(id(node.start_pos[0]))
-        except AttributeError:
-            # module raises here...
-            pass
+    try:
+        if node.get_previous_sibling().type == 'newline':
+            node.prefix = indent * '    '
+    except AttributeError:
+        # module raises here...
+        pass
 
     if hasattr(node, 'children') and node.children:
         if len(node.children) > 2 and node.children[-2].type == 'operator' and node.children[-2].value == ':':
