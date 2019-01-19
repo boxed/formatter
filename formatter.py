@@ -141,35 +141,14 @@ suffix_by_type_and_value = {
 }
 
 
-def check_same_but_different_prefix(a: Node, b: Node, indent=0):
-    assert hasattr(a, 'prefix') == hasattr(b, 'prefix')
-    assert hasattr(a, 'children') == hasattr(b, 'children')
-    assert hasattr(a, 'value') == hasattr(b, 'value')
+def set_prefix(node, prefix, indent=None, prev_leaf=None):
+    # This function is complicated because indent, comments and spacing are mushed together in the "prefix" property
 
-    if hasattr(a, 'prefix') and a.type != 'newline':
-        assert a.prefix != b.prefix
-        print(repr(b.prefix), indent, b.type, b.value, key_for_node(b))
+    if not hasattr(node, '_split_prefix'):
+        assert '#' not in node.prefix
+        node.prefix = prefix
+        return
 
-    assert a.type == b.type
-
-    if hasattr(a, 'value'):
-        assert a.value == b.value
-
-    if hasattr(a, 'children'):
-        if len(a.children) > 2 and a.children[-2].type == 'operator' and a.children[-2].value == ':':
-            indent += 1
-
-        assert len(a.children) == len(b.children)
-        for ac, bc in zip(a.children, b.children):
-            check_same_but_different_prefix(ac, bc, indent=indent)
-
-
-# check_same_but_different_prefix(parse(too_much_space), parse(nicely_formatted))
-
-parsed = parse(nicely_formatted)
-
-
-def set_prefix(node, prefix, indent=None):
     parts = list(node._split_prefix())
 
     if indent is None:
@@ -188,7 +167,9 @@ def set_prefix(node, prefix, indent=None):
     if not parts or parts[-1].type != 'spacing':
         parts.append(PrefixPart(node, 'spacing', value='', start_pos=node.start_pos))
 
-    if node.get_previous_leaf() and node.get_previous_leaf().type != 'newline':
+    if prev_leaf is None:
+        prev_leaf = node.get_previous_leaf()
+    if prev_leaf and prev_leaf.type != 'newline':
         # two spaces before inline comments
         for p in parts:
             if p.type == 'comment':
@@ -227,8 +208,9 @@ def reformat_spaces(node: Node, already_handled_prefix_ids=None):
 
 def fix_indent(node, indent=0):
     try:
-        if hasattr(node, 'prefix') and node.get_previous_leaf().type == 'newline':
-            set_prefix(node, indent * '    ', indent=indent)
+        prev_leaf = node.get_previous_leaf()
+        if hasattr(node, 'prefix') and prev_leaf.type == 'newline':
+            set_prefix(node, indent * '    ', indent=indent, prev_leaf=prev_leaf)
     except AttributeError:
         # module raises here...
         pass
