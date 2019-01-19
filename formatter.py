@@ -159,14 +159,13 @@ def check_same_but_different_prefix(a: Node, b: Node, indent=0):
 parsed = parse(nicely_formatted)
 
 
-def reformat(node: Node, indent=0, already_handled_prefix_ids=None):
+def reformat_spaces(node: Node, already_handled_prefix_ids=None):
     if already_handled_prefix_ids is None:
         already_handled_prefix_ids = set()
 
     # TODO: handle prefix via _split_prefix to not destroy comments
     # if hasattr(node, 'prefix'):
         # split_prefix = list(node._split_prefix())
-
 
     key = key_for_node(node)
     prefix, suffix = prefix_and_suffix_by_key.get(key, ('', ''))
@@ -181,20 +180,33 @@ def reformat(node: Node, indent=0, already_handled_prefix_ids=None):
         right.prefix = suffix
         already_handled_prefix_ids.add(id(right))
 
+    if hasattr(node, 'children') and node.children:
+        for child in node.children:
+            reformat_spaces(child, already_handled_prefix_ids=already_handled_prefix_ids)
+
+
+def fix_indent(node, indent=0):
     # TODO: prefix that includes indent
     try:
-        if node.get_previous_sibling().type == 'newline':
+        if hasattr(node, 'prefix') and node.get_previous_leaf().type == 'newline':
             node.prefix = indent * '    '
     except AttributeError:
         # module raises here...
         pass
 
     if hasattr(node, 'children') and node.children:
-        if len(node.children) > 2 and node.children[-2].type == 'operator' and node.children[-2].value == ':':
-            indent += 1
 
         for child in node.children:
-            reformat(child, indent=indent, already_handled_prefix_ids=already_handled_prefix_ids)
+            if child.type == 'operator' and child.value == ':':
+                indent += 1
+
+            fix_indent(child, indent=indent)
+
+
+def reformat(node: Node):
+    reformat_spaces(node)
+    fix_indent(node)
+
 
 print(parsed)
 
