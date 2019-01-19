@@ -40,10 +40,11 @@ class        Foo          (
 
 def         bar          (
 
-         a   ,     *     b
+         a   ,  # comment3
+              *     b
            ,      **
             c
-            )       :          # comment3
+            )       :          # comment4
 
 
 
@@ -71,7 +72,14 @@ nicely_formatted = """class Foo(object):
         for x in baz:  # comment2
             x += 1
 
-def bar(a, *b, **c):  # comment3
+
+
+
+
+def bar(
+      a,  # comment3 
+      *b, 
+      **c):  # comment4
     class Nested:
         pass
     def nested():
@@ -161,10 +169,24 @@ def check_same_but_different_prefix(a: Node, b: Node, indent=0):
 parsed = parse(nicely_formatted)
 
 
-def set_prefix(node, prefix, indent=0):
+def set_prefix(node, prefix, indent=None):
     parts = list(node._split_prefix())
-    if parts[-1].type != 'spacing':
-        parts.append(PrefixPart(node, 'spacing', value=None))
+
+    if indent is None:
+        keep_a_newline = False
+        new_parts = []
+        for p in parts:
+            if p.type == 'comment':
+                new_parts.append(p)
+                keep_a_newline = True
+            elif p.type == 'newline' and keep_a_newline:
+                new_parts.append(p)
+                keep_a_newline = False
+
+        parts = new_parts
+
+    if not parts or parts[-1].type != 'spacing':
+        parts.append(PrefixPart(node, 'spacing', value='', start_pos=node.start_pos))
 
     if node.get_previous_leaf() and node.get_previous_leaf().type != 'newline':
         # two spaces before inline comments
@@ -185,10 +207,6 @@ def reformat_spaces(node: Node, already_handled_prefix_ids=None):
     if already_handled_prefix_ids is None:
         already_handled_prefix_ids = set()
 
-    # TODO: handle prefix via _split_prefix to not destroy comments
-    # if hasattr(node, 'prefix'):
-        # split_prefix = list(node._split_prefix())
-
     key = key_for_node(node)
     prefix, suffix = prefix_and_suffix_by_key.get(key, ('', ''))
     if not id(node) in already_handled_prefix_ids:
@@ -208,7 +226,6 @@ def reformat_spaces(node: Node, already_handled_prefix_ids=None):
 
 
 def fix_indent(node, indent=0):
-    # TODO: prefix that includes indent
     try:
         if hasattr(node, 'prefix') and node.get_previous_leaf().type == 'newline':
             set_prefix(node, indent * '    ', indent=indent)
@@ -225,12 +242,12 @@ def fix_indent(node, indent=0):
             fix_indent(child, indent=indent)
 
 
-def reformat(node: Node):
+def reformat(source):
+    node = parse(source)
     reformat_spaces(node)
     fix_indent(node)
+    return node.get_code()
 
-
-print(parsed)
 
 # from json import dumps
 #
@@ -245,7 +262,8 @@ print(parsed)
 #
 # print(dumps(ast_to_dict(parsed), indent=4))
 
-reformat(parsed)
+
+print(reformat(nicely_formatted))
 
 
-print(parsed.get_code())
+assert reformat(nicely_formatted) == reformat(too_much_space)
