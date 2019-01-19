@@ -1,4 +1,5 @@
 from parso import parse
+from parso.python.prefix import PrefixPart
 from parso.tree import Node
 
 too_much_space = """
@@ -76,6 +77,7 @@ def bar(a, *b, **c):  # comment3
     def nested():
         baz()
 """
+
 
 def key_for_node(node):
     if node.type == 'operator' and node.parent.type == 'param':
@@ -159,6 +161,26 @@ def check_same_but_different_prefix(a: Node, b: Node, indent=0):
 parsed = parse(nicely_formatted)
 
 
+def set_prefix(node, prefix, indent=0):
+    parts = list(node._split_prefix())
+    if parts[-1].type != 'spacing':
+        parts.append(PrefixPart(node, 'spacing', value=None))
+
+    if node.get_previous_leaf() and node.get_previous_leaf().type != 'newline':
+        # two spaces before inline comments
+        for p in parts:
+            if p.type == 'comment':
+                p.value = '  ' + p.value.strip()
+    elif indent:
+        # indent comments on their own lines
+        for p in parts:
+            if p.type == 'comment':
+                p.value = ('    ' * indent) + p.value.strip()
+
+    parts[-1].value = prefix
+    node.prefix = ''.join(x.value for x in parts)
+
+
 def reformat_spaces(node: Node, already_handled_prefix_ids=None):
     if already_handled_prefix_ids is None:
         already_handled_prefix_ids = set()
@@ -173,11 +195,11 @@ def reformat_spaces(node: Node, already_handled_prefix_ids=None):
         if not hasattr(node, 'prefix'):
             assert not prefix
         else:
-            node.prefix = prefix
+            set_prefix(node, prefix)
 
     if suffix:
         right = node.get_next_leaf()
-        right.prefix = suffix
+        set_prefix(right, suffix)
         already_handled_prefix_ids.add(id(right))
 
     if hasattr(node, 'children') and node.children:
@@ -189,7 +211,7 @@ def fix_indent(node, indent=0):
     # TODO: prefix that includes indent
     try:
         if hasattr(node, 'prefix') and node.get_previous_leaf().type == 'newline':
-            node.prefix = indent * '    '
+            set_prefix(node, indent * '    ', indent=indent)
     except AttributeError:
         # module raises here...
         pass
